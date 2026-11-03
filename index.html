@@ -112,6 +112,7 @@ footer{padding:0 24px 24px;color:var(--muted);font-size:12px}
 </div>
 
 <div class="legend" id="legend"></div>
+<div class="hint" id="explic" style="padding:0 24px 8px"></div>
 
 <div class="card">
   <table>
@@ -210,9 +211,10 @@ function ventana(sel, modo, anios){ // indices de comparacion previos al mes sel
   else { for(let j=1;j<=12*anios;j++){ const k=sel-j; if(k>=0) idx.push(k);} }
   return idx;
 }
-function resumen(serie, sel){
+function resumen(serie, sel, anios){
+  if(anios==null) anios = st.anios;
   const cur = serie[sel];
-  const w = ventana(sel, st.modo, st.anios).map(k=>serie[k]).filter(v=>v!=null);
+  const w = ventana(sel, st.modo, anios).map(k=>serie[k]).filter(v=>v!=null);
   if(!w.length) return {cur, avg:null, min:null, max:null, dif:null};
   const avg = w.reduce((a,b)=>a+b,0)/w.length;
   const vals = cur==null ? w : [...w,cur];
@@ -283,6 +285,8 @@ function render(){
   document.getElementById('refUnidad').textContent = ' ' + den.u;
   const dd = den.t==='serie' ? col(den.i) : null;
   document.getElementById('refValor').textContent = fmt(dd ? dd[st.sel] : null);
+
+  document.getElementById('explic').textContent = `"Relación actual" = ${unidadTxt} que hacen falta hoy para comprar 1 unidad de cada ítem. "Promedio" = lo mismo, en promedio de los últimos ${st.anios} años. Pasá el mouse sobre cada valor para verlo en palabras.`;
 }
 
 /* ---------- modal con grafico de evolucion ---------- */
@@ -295,9 +299,10 @@ function abrirModal(key){
   document.getElementById('pMeta').textContent = `Serie mensual en ${den.n}`;
   document.getElementById('rangos').innerHTML = RANGOS.map(([v,t])=>`<button data-r="${v}" class="${st.rango===v?'on':''}">${t}</button>`).join('');
   document.querySelectorAll('#rangos button').forEach(b=>b.onclick=()=>{st.rango=b.dataset.r; abrirModal(key);});
-  const ventanaComp = st.modo==='mismo' ? statsVentana(r) : null;
-  dibujar(r, ventanaComp);
-  const q=r.r;
+  const anios = st.rango==='all' ? 100 : +st.rango;
+  const q = resumen(r.serie, st.sel, anios);
+  const ventanaComp = st.modo==='mismo' ? statsVentana(r, anios) : null;
+  dibujar(r, ventanaComp, q, anios);
   const keyFor = v => (v==null||q.avg==null) ? '' : estado(Math.round((v/q.avg-1)*100)/100).k;
   const tiles = [['Actual',fmt(q.cur)],['Promedio',fmt(q.avg)]];
   if(ventanaComp){
@@ -319,8 +324,9 @@ document.getElementById('modalClose').onclick = cerrarModal;
 document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') cerrarModal(); });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') cerrarModal(); });
 
-function statsVentana(r){ // min/max/Q1/Q3 de la ventana de comparación, cada uno con el mes/año real en que ocurrió
-  const idx = ventana(st.sel, 'mismo', st.anios).slice();
+function statsVentana(r, anios){ // min/max/Q1/Q3 de la ventana de comparación, cada uno con el mes/año real en que ocurrió
+  if(anios==null) anios = st.anios;
+  const idx = ventana(st.sel, 'mismo', anios).slice();
   if(r.r.cur!=null) idx.push(st.sel);
   const obs = idx.map(k=>({k, v:r.serie[k]})).filter(o=>o.v!=null);
   if(obs.length<2) return null;
@@ -329,14 +335,14 @@ function statsVentana(r){ // min/max/Q1/Q3 de la ventana de comparación, cada u
   const minO=sorted[0], maxO=sorted[sorted.length-1], q1O=en(0.25), q3O=en(0.75);
   return {min:minO.v, minK:minO.k, max:maxO.v, maxK:maxO.k, q1:q1O.v, q1K:q1O.k, q3:q3O.v, q3K:q3O.k};
 }
-function dibujar(r, ventanaComp){
+function dibujar(r, ventanaComp, q, anios){
   const W=600,H=300,pl=54,pr=20,pt=14,pb=30;
   const hasta = st.sel;
   const desde = st.rango==='all' ? 0 : Math.max(0, hasta - 12*(+st.rango));
   const pts=[]; for(let k=desde;k<=hasta;k++) if(r.serie[k]!=null) pts.push([k,r.serie[k]]);
   if(pts.length<2){ document.getElementById('chart').innerHTML='<div class="hint">Sin datos suficientes en este rango.</div>'; return; }
   let lo=Math.min(...pts.map(p=>p[1])), hi=Math.max(...pts.map(p=>p[1]));
-  const avg=r.r.avg; if(avg!=null){ lo=Math.min(lo,avg); hi=Math.max(hi,avg); }
+  const avg=q.avg; if(avg!=null){ lo=Math.min(lo,avg); hi=Math.max(hi,avg); }
   if(ventanaComp){ lo=Math.min(lo,ventanaComp.min,ventanaComp.q1); hi=Math.max(hi,ventanaComp.max,ventanaComp.q3); }
   const pad=(hi-lo)*0.08||1; lo-=pad; hi+=pad; if(lo<0 && Math.min(...pts.map(p=>p[1]))>=0) lo=0;
   const X=k=>pl+(k-desde)/Math.max(1,hasta-desde)*(W-pl-pr), Y=v=>pt+(1-(v-lo)/(hi-lo))*(H-pt-pb);
@@ -354,7 +360,7 @@ function dibujar(r, ventanaComp){
     g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(ventanaComp.max)}" y2="${Y(ventanaComp.max)}" stroke="${colMM}" stroke-dasharray="1.5 3"/><text x="${pl+4}" y="${Y(ventanaComp.max)-5}" font-size="11" fill="${colMM}" stroke="#fff" stroke-width="3" paint-order="stroke">máx ${fmt(ventanaComp.max)}</text>`;
     g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(ventanaComp.min)}" y2="${Y(ventanaComp.min)}" stroke="${colMM}" stroke-dasharray="1.5 3"/><text x="${pl+4}" y="${Y(ventanaComp.min)+13}" font-size="11" fill="${colMM}" stroke="#fff" stroke-width="3" paint-order="stroke">mín ${fmt(ventanaComp.min)}</text>`;
   }
-  if(st.modo==='mismo'){ ventana(st.sel,'mismo',st.anios).forEach(k=>{ if(k>=desde && r.serie[k]!=null) g+=`<circle cx="${X(k)}" cy="${Y(r.serie[k])}" r="3.2" fill="#fff" stroke="#e0503c" stroke-width="1.6"/>`; }); }
+  if(st.modo==='mismo'){ ventana(st.sel,'mismo',anios).forEach(k=>{ if(k>=desde && r.serie[k]!=null) g+=`<circle cx="${X(k)}" cy="${Y(r.serie[k])}" r="3.2" fill="#fff" stroke="#e0503c" stroke-width="1.6"/>`; }); }
   const ult=pts[pts.length-1]; g+=`<circle cx="${X(ult[0])}" cy="${Y(ult[1])}" r="4.5" fill="#2f6b4f" stroke="#fff" stroke-width="1.5"/>`;
   g+=`<line id="vl" y1="${pt}" y2="${H-pb}" stroke="#999" stroke-dasharray="3 3" style="display:none"/><circle id="vc" r="4" fill="#1f2a24" style="display:none"/><rect id="ov" x="${pl}" y="${pt}" width="${W-pl-pr}" height="${H-pt-pb}" fill="transparent"/>`;
   const el=document.getElementById('chart');

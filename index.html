@@ -28,7 +28,6 @@ select,input[type=number]{font:inherit;font-size:13px;padding:5px 7px;border:1px
 
 .legend{display:flex;flex-wrap:wrap;gap:4px;padding:0 24px 10px;align-items:center;color:var(--muted);font-size:12px}
 .legend .lbl{margin-right:2px}
-.legend .bar{padding:3px 8px;font-size:10px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;margin:0 24px 24px;overflow:hidden}
 table{width:100%;border-collapse:collapse}
 th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;text-align:right;padding:9px 10px;border-bottom:1px solid var(--line);background:#faf9f6;font-weight:650}
@@ -39,8 +38,11 @@ tr.grupo td{background:#efece3;color:var(--muted);font-size:11px;text-transform:
 tr.fila{cursor:pointer}
 tr.fila:hover td{filter:brightness(0.97)}
 td.num.strong{font-weight:700;font-size:14.5px}
-td.estado{text-align:center;padding:5px 6px;width:122px}
-.bar{display:block;width:112px;margin:0 auto;box-sizing:border-box;white-space:nowrap;padding:5px 4px;border-radius:5px;font-size:11px;font-weight:700;letter-spacing:.02em;text-align:center}
+td.estado{text-align:center;padding:4px 4px;width:78px}
+.bar{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;width:68px;margin:0 auto;box-sizing:border-box;padding:3px 2px;border-radius:7px;text-align:center}
+.bar b{font-size:11px;font-weight:700;line-height:1.1}
+.bar i{font-size:8.5px;font-weight:600;font-style:normal;letter-spacing:.01em;line-height:1.1}
+.legend .bar{display:inline-flex;width:auto;padding:3px 8px;font-size:10px;font-weight:700}
 .k3{background:var(--rojo3);color:#fff}
 .k2{background:var(--rojo2);color:#fff}
 .k1{background:var(--rojo1);color:#5a2a1c}
@@ -171,12 +173,12 @@ const DENS = [
 
 /* ---------- estados (misma leyenda que la planilla, colores rojo/verde) ---------- */
 const ESTADOS = [
-  {min: 0.25, n:'MUY CARO', k:'k3'}, {min:0.10, n:'CARO', k:'k2'}, {min:0.05, n:'LEVEMENTE CARO', k:'k1'},
-  {min:-0.05, n:'PROMEDIO', k:'k0'}, {min:-0.10, n:'LEVEMENTE BARATO', k:'j1'}, {min:-0.25, n:'BARATO', k:'j2'},
-  {min:-Infinity, n:'MUY BARATO', k:'j3'}
+  {min: 0.25, n:'MUY CARO', c:'Muy caro', k:'k3'}, {min:0.10, n:'CARO', c:'Caro', k:'k2'}, {min:0.05, n:'LEVEMENTE CARO', c:'Lev. caro', k:'k1'},
+  {min:-0.05, n:'PROMEDIO', c:'Promedio', k:'k0'}, {min:-0.10, n:'LEVEMENTE BARATO', c:'Lev. barato', k:'j1'}, {min:-0.25, n:'BARATO', c:'Barato', k:'j2'},
+  {min:-Infinity, n:'MUY BARATO', c:'Muy barato', k:'j3'}
 ];
 function estado(dif){ // dif ya redondeada a 2 decimales como en la planilla
-  if(dif===null||dif===undefined) return {n:'s/d',k:'kn'};
+  if(dif===null||dif===undefined) return {n:'s/d', c:'s/d', k:'kn'};
   if(dif>0.25) return ESTADOS[0];
   if(dif>=0.10) return ESTADOS[1];
   if(dif>=0.05) return ESTADOS[2];
@@ -277,7 +279,7 @@ function render(){
         <td class="item">${r.it[1]}</td>
         <td class="num strong" title="${tActual}">${fmt(r.r.cur)}</td>
         <td class="num" title="${tProm}">${fmt(r.r.avg)}</td>
-        <td class="estado"><span class="bar ${e.k}">${e.n}</span></td></tr>`;
+        <td class="estado"><span class="bar ${e.k}" title="${fmtPct(r.r.dif)} respecto del promedio: ${e.n}">${r.r.dif!=null?`<b>${fmtPct(r.r.dif)}</b>`:''}<i>${e.c}</i></span></td></tr>`;
     });
   });
   tb.innerHTML = html;
@@ -406,8 +408,8 @@ function init(){
   selMes.onchange=e=>{st.sel=+e.target.value; render();};
   document.getElementById('modo').onchange=e=>{st.modo=e.target.value; render();};
   document.getElementById('anios').onchange=e=>{st.anios=+e.target.value; render();};
-  const leg=[['k3','MUY CARO','> +25%'],['k2','CARO','+10 a +25%'],['k1','LEV. CARO','+5 a +10%'],['k0','PROMEDIO','±5%'],['j1','LEV. BARATO','-5 a -10%'],['j2','BARATO','-10 a -25%'],['j3','MUY BARATO','< -25%']];
-  document.getElementById('legend').innerHTML='<span class="lbl">Estado:</span>'+leg.map(([k,n,r])=>`<span class="bar ${k}" title="${r} respecto del promedio" style="display:inline-block">${n}</span>`).join('');
+  const leg=[['k3','> +25%'],['k2','+10 a +25%'],['k1','+5 a +10%'],['k0','±5%'],['j1','-5 a -10%'],['j2','-10 a -25%'],['j3','< -25%']];
+  document.getElementById('legend').innerHTML='<span class="lbl">Estado:</span>'+leg.map(([k,r])=>{ const e=ESTADOS.find(x=>x.k===k); return `<span class="bar ${k}" title="${r} respecto del promedio" style="display:inline-flex">${e.c}</span>`; }).join('');
   render();
 }
 init();
